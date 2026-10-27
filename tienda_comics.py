@@ -3,7 +3,7 @@
 Usuarios de prueba:
     admin     / admin123   (Administrador)
     vendedor  / venta123   (Vendedor)
-
+ARC 301
 """
 
 import tkinter as tk
@@ -79,17 +79,19 @@ class Venta:
     vendedor: Usuario
     lineas: list = field(default_factory=list)
 
+    # Los precios de los artículos YA incluyen IVA: el total es la suma de
+    # los importes y el subtotal/IVA se desglosan a partir de él.
+    @property
+    def total(self):
+        return sum(l.importe for l in self.lineas)
+
     @property
     def subtotal(self):
-        return sum(l.importe for l in self.lineas)
+        return self.total / (1 + IVA)
 
     @property
     def iva(self):
         return self.subtotal * IVA
-
-    @property
-    def total(self):
-        return self.subtotal + self.iva
 
     def ticket_texto(self):
         w = 46
@@ -105,7 +107,7 @@ class Venta:
                f"Atendió:  {self.vendedor.nombre}",
                guion,
                "Producto".ljust(w),
-               f"{'Cant':<6}{'P. Unit.':>14}{'Importe':>26}"[:w],
+               f"{'Cant':<6}{'P. Unit. c/IVA':>14}{'Importe':>26}"[:w],
                guion]
         for l in self.lineas:
             out.append(l.titulo[:w])
@@ -113,7 +115,7 @@ class Venta:
             out.append(detalle + money(l.importe).rjust(w - len(detalle)))
         out += [guion,
                 f"{'Subtotal:':<30}{money(self.subtotal):>16}",
-                f"{'IVA (16%):':<30}{money(self.iva):>16}",
+                f"{'IVA (16%, incluido):':<30}{money(self.iva):>16}",
                 f"{'TOTAL:':<30}{money(self.total):>16}",
                 linea,
                 "¡Gracias por tu compra!".center(w),
@@ -277,7 +279,7 @@ class TabVenta(ttk.Frame):
         ttk.Entry(fb, textvariable=self.busq).pack(side="left", fill="x", expand=True, padx=6)
 
         cols = [("ID", 40, "center"), ("Título", 200, "w"), ("Autor", 140, "w"),
-                ("Formato", 85, "center"), ("Stock", 50, "center"), ("Precio", 75, "e")]
+                ("Formato", 85, "center"), ("Stock", 50, "center"), ("Precio c/IVA", 90, "e")]
         f, self.tv_cat = crear_tabla(izq, cols, 14)
         f.pack(fill="both", expand=True)
         self.tv_cat.bind("<Double-1>", lambda e: self.agregar())
@@ -298,7 +300,7 @@ class TabVenta(ttk.Frame):
         self.cb_cliente.pack(side="left", padx=6)
 
         cols2 = [("Título", 190, "w"), ("Cant", 45, "center"),
-                 ("P. Unit.", 75, "e"), ("Importe", 85, "e")]
+                 ("P. Unit. c/IVA", 100, "e"), ("Importe", 85, "e")]
         f2, self.tv_car = crear_tabla(der, cols2, 10)
         f2.pack(fill="both", expand=True)
 
@@ -310,7 +312,7 @@ class TabVenta(ttk.Frame):
         tot = ttk.Frame(der)
         tot.pack(fill="x", pady=(4, 0))
         self.lbl_sub = self._fila_total(tot, "Subtotal:", 0)
-        self.lbl_iva = self._fila_total(tot, "IVA (16%):", 1)
+        self.lbl_iva = self._fila_total(tot, "IVA incluido (16%):", 1)
         self.lbl_tot = self._fila_total(tot, "TOTAL:", 2, grande=True)
         ttk.Button(der, text="COBRAR Y GENERAR TICKET", style="Cobrar.TButton",
                    command=self.cobrar).pack(fill="x", pady=(10, 0), ipady=6)
@@ -385,10 +387,11 @@ class TabVenta(ttk.Frame):
             subtotal += imp
             filas.append((pid, (p.titulo, cant, money(p.precio), money(imp)), []))
         llenar(self.tv_car, filas)
-        iva = subtotal * IVA
-        self.lbl_sub.config(text=money(subtotal))
-        self.lbl_iva.config(text=money(iva))
-        self.lbl_tot.config(text=money(subtotal + iva))
+        total = subtotal  # suma de importes (precios ya con IVA)
+        base = total / (1 + IVA)
+        self.lbl_sub.config(text=money(base))
+        self.lbl_iva.config(text=money(base * IVA))
+        self.lbl_tot.config(text=money(total))
 
     def cobrar(self):
         if not self.carrito:
@@ -429,7 +432,7 @@ class TabInventario(ttk.Frame):
 
         cols = [("ID", 40, "center"), ("Título", 230, "w"), ("Autor", 170, "w"),
                 ("Género", 100, "w"), ("Editorial", 110, "w"), ("Formato", 85, "center"),
-                ("Stock", 50, "center"), ("Precio", 80, "e")]
+                ("Stock", 50, "center"), ("Precio c/IVA", 90, "e")]
         f, self.tv = crear_tabla(self, cols, 12)
         f.pack(fill="both", expand=True)
         self.tv.bind("<<TreeviewSelect>>", self.al_seleccionar)
@@ -446,7 +449,7 @@ class TabInventario(ttk.Frame):
         campos = [("Título", "titulo", None), ("Autor", "autor", None),
                   ("Género", "genero", GENEROS), ("Editorial", "editorial", None),
                   ("Formato", "formato", FORMATOS), ("Stock", "stock", None),
-                  ("Precio ($)", "precio", None)]
+                  ("Precio c/IVA ($)", "precio", None)]
         for i, (txt, key, vals) in enumerate(campos):
             r, c = divmod(i, 4)
             ttk.Label(form, text=txt).grid(row=r * 2, column=c, sticky="w", padx=4)
